@@ -1,157 +1,59 @@
-import sys
-
-from app.tmdb_client import TMDBClient
 from app.graph_store import GraphStore
+from app.movie_resolver import MovieResolver
+from app.tmdb_client import TMDBClient
 
 
-def search_movie(title: str):
+def load_and_store_movie(selected_movie: dict) -> dict:
+    # `selected_movie` comes from search results; fetch the full profile before persistence.
     client = TMDBClient()
-    results = client.search_movies(title)
-
-    if not results:
-        print("No movies found.")
-        return
-
-    print(f"\nResults for: {title}")
-    print("=" * 100)
-
-    for index, movie in enumerate(results[:10], start=1):
-        title = movie.get("title")
-        original_title = movie.get("original_title")
-        release_date = movie.get("release_date") or "Unknown"
-        movie_id = movie.get("id")
-
-        print(f"{index}. {title} ({release_date[:4]})")
-        print(f"   TMDB ID: {movie_id}")
-        print(f"   Original title: {original_title}")
-        print("-" * 100)
-
-
-def show_movie_profile(movie_id: int):
-    client = TMDBClient()
-    movie = client.get_normalized_movie_profile(movie_id)
-
-    print(f"\n{movie['title']} ({movie['year']})")
-    print("=" * 80)
-    print(f"TMDB ID: {movie['tmdb_id']}")
-    print(f"Original title: {movie['original_title']}")
-    print(f"Runtime: {movie['runtime']} min")
-    print(f"Overview: {movie['overview']}")
-    print()
-
-    print("Directors:")
-    for director in movie["directors"]:
-        print(f"- {director['name']}")
-
-    print("\nGenres:")
-    for genre in movie["genres"]:
-        print(f"- {genre['name']}")
-
-    print("\nTop Cast:")
-    for cast in movie["cast"]:
-        print(f"- {cast['name']} as {cast['character']}")
-
-    print("\nKeywords:")
-    for keyword in movie["keywords"][:15]:
-        print(f"- {keyword['name']}")
-
-
-def select_movie_by_title(title: str) -> dict | None:
-    client = TMDBClient()
-    results = client.search_movies(title)
-
-    if not results:
-        print(f"No movies found for: {title}")
-        return None
-
-    top_results = results[:10]
-
-    print(f"\nSelect movie for: {title}")
-    print("=" * 80)
-
-    for index, movie in enumerate(top_results, start=1):
-        movie_title = movie.get("title")
-        original_title = movie.get("original_title")
-        release_date = movie.get("release_date") or "Unknown"
-        movie_id = movie.get("id")
-        overview = (movie.get("overview") or "").replace("\n", " ")
-
-        print(f"{index}. {movie_title} ({release_date[:4]})")
-        print(f"   TMDB ID: {movie_id}")
-        print(f"   Original title: {original_title}")
-        print(f"   Overview: {overview[:180]}...")
-        print("-" * 80)
-
-    choice = input("Choose movie number (or press Enter to cancel): ").strip()
-
-    if not choice:
-        print("Cancelled.")
-        return None
-
-    if not choice.isdigit():
-        print("Invalid choice.")
-        return None
-
-    choice_index = int(choice)
-
-    if choice_index < 1 or choice_index > len(top_results):
-        print("Choice out of range.")
-        return None
-
-    return top_results[choice_index - 1]
-
-
-def ingest_movie_by_title(title: str):
-    selected = select_movie_by_title(title)
-
-    if not selected:
-        return
-
-    movie_id = selected["id"]
-
-    client = TMDBClient()
-
-    print(f"\nFetching movie profile: {selected['title']} ({movie_id})")
-    movie = client.get_normalized_movie_profile(movie_id)
-
     store = GraphStore()
 
+    movie_id = selected_movie["id"]
+
+    print(f"\nFetching full profile for: {selected_movie.get('title')} ({movie_id})")
+
+    movie_profile = client.get_normalized_movie_profile(movie_id)
+
     try:
-        print(f"Saving to Neo4j: {movie['title']}")
-        store.save_movie_profile(movie)
-        print("Movie saved to graph.")
+        print(f"Saving to Neo4j: {movie_profile['title']}")
+        store.save_movie_profile(movie_profile)
     finally:
+        # Always close the driver, even when network/database writes fail mid-flow.
         store.close()
+
+    return movie_profile
 
 
 def main():
-    if len(sys.argv) < 3:
-        print('Usage: python main.py search "Batman"')
+    print("\nCineNexus")
+    print("=" * 80)
+    print("Discover graph-based connections between two movies.")
+    print("=" * 80)
+
+    resolver = MovieResolver()
+
+    first_selected = resolver.resolve("first")
+
+    if not first_selected:
+        print("Cancelled.")
         return
 
-    command = sys.argv[1]
+    first_movie = load_and_store_movie(first_selected)
 
-    if command == "search":
-        title = " ".join(sys.argv[2:])
-        search_movie(title)
-    elif command == "profile":
-        if len(sys.argv) < 3:
-            print("Usage: python main.py profile <tmdb_id>")
-            return
+    second_selected = resolver.resolve("second")
 
-        show_movie_profile(int(sys.argv[2]))
+    if not second_selected:
+        print("Cancelled.")
+        return
 
-    elif command == "ingest":
+    second_movie = load_and_store_movie(second_selected)
 
-        if len(sys.argv) < 3:
-            print('Usage: python main.py ingest "Batman"')
-            return
+    print("\nSelected movies:")
+    print("=" * 80)
+    print(f"1. {first_movie['title']} ({first_movie['year']})")
+    print(f"2. {second_movie['title']} ({second_movie['year']})")
 
-        title = " ".join(sys.argv[2:])
-        ingest_movie_by_title(title)
-
-    else:
-        print(f"Unknown command: {command}")
+    print("\nNext step: find graph connections between these movies.")
 
 
 if __name__ == "__main__":
