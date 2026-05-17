@@ -1,4 +1,5 @@
 from app.connection_finder import ConnectionFinder
+from app.ai_explainer import AIExplainer
 from app.graph_store import GraphStore
 from app.movie_resolver import MovieResolver
 from app.tmdb_client import TMDBClient
@@ -95,6 +96,13 @@ def main():
         finder.close()
 
     print_connections(connections)
+
+    explainer = AIExplainer()
+    explanation = explainer.explain(connections)
+
+    print("\nAI explanation:")
+    print("=" * 80)
+    print(explanation)
 
 
 if __name__ == "__main__":
