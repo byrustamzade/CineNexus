@@ -1,3 +1,4 @@
+from app.connection_finder import ConnectionFinder
 from app.graph_store import GraphStore
 from app.movie_resolver import MovieResolver
 from app.tmdb_client import TMDBClient
@@ -17,11 +18,41 @@ def load_and_store_movie(selected_movie: dict) -> dict:
     try:
         print(f"Saving to Neo4j: {movie_profile['title']}")
         store.save_movie_profile(movie_profile)
+        print("Movie saved.")
     finally:
         # Always close the driver, even when network/database writes fail mid-flow.
         store.close()
 
     return movie_profile
+
+
+def print_connections(connections: dict) -> None:
+    print("\nGraph connections:")
+    print("=" * 80)
+
+    if not connections:
+        print("No connections found.")
+        return
+
+    print("Shared directors:")
+    print(connections.get("shared_directors") or "None")
+
+    print("\nShared actors:")
+    print(connections.get("shared_actors") or "None")
+
+    print("\nShared genres:")
+    print(connections.get("shared_genres") or "None")
+
+    print("\nShared keywords:")
+    print(connections.get("shared_keywords") or "None")
+
+    print("\nShared release years:")
+    print(connections.get("shared_years") or "None")
+
+    shortest_path = connections.get("shortest_path") or []
+
+    print("\nShortest path:")
+    print(" -> ".join(shortest_path) if shortest_path else "None")
 
 
 def main():
@@ -53,7 +84,17 @@ def main():
     print(f"1. {first_movie['title']} ({first_movie['year']})")
     print(f"2. {second_movie['title']} ({second_movie['year']})")
 
-    print("\nNext step: find graph connections between these movies.")
+    finder = ConnectionFinder()
+
+    try:
+        connections = finder.find_between_movies(
+            first_movie["tmdb_id"],
+            second_movie["tmdb_id"],
+        )
+    finally:
+        finder.close()
+
+    print_connections(connections)
 
 
 if __name__ == "__main__":

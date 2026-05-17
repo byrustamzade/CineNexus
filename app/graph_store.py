@@ -1,4 +1,4 @@
-from neo4j import GraphDatabase
+from app.neo4j_connection import Neo4jConnection
 
 from app.settings import (
     NEO4J_URI,
@@ -9,16 +9,13 @@ from app.settings import (
 
 class GraphStore:
     def __init__(self):
-        self.driver = GraphDatabase.driver(
-            NEO4J_URI,
-            auth=(NEO4J_USERNAME, NEO4J_PASSWORD),
-        )
+        self.connection = Neo4jConnection()
 
     def close(self):
-        self.driver.close()
+        self.connection.close()
 
     def save_movie_profile(self, movie: dict):
-        with self.driver.session() as session:
+        with self.connection.session() as session:
             session.execute_write(self._save_movie_profile, movie)
 
     @staticmethod
