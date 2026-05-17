@@ -23,6 +23,7 @@ class GraphStore:
 
     @staticmethod
     def _save_movie_profile(tx, movie: dict):
+        # MERGE on `tmdb_id` makes writes idempotent across repeated imports.
         tx.run(
             """
             MERGE (m:Movie {tmdb_id: $tmdb_id})
@@ -42,6 +43,7 @@ class GraphStore:
         )
 
         if movie.get("year"):
+            # Year is modeled as a shared node to support temporal graph traversals.
             tx.run(
                 """
                 MATCH (m:Movie {tmdb_id: $tmdb_id})
@@ -52,6 +54,7 @@ class GraphStore:
                 year=movie["year"],
             )
 
+        # Relationship directions are intentional for role-centric traversals.
         for director in movie.get("directors", []):
             tx.run(
                 """
@@ -65,6 +68,7 @@ class GraphStore:
                 name=director["name"],
             )
 
+        # Cast order is persisted as relationship metadata so billing rank is queryable.
         for cast in movie.get("cast", []):
             tx.run(
                 """

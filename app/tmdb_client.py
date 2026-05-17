@@ -49,11 +49,13 @@ class TMDBClient:
         return response.json()
 
     def normalize_movie_profile(self, raw: dict) -> dict:
+        # TMDB keeps directors inside the generic crew list; filter explicitly by job.
         directors = [
             person for person in raw.get("credits", {}).get("crew", [])
             if person.get("job") == "Director"
         ]
 
+        # Bound cast fan-out so graph writes/queries stay predictable for each movie node.
         top_cast = raw.get("credits", {}).get("cast", [])[:10]
 
         return {
