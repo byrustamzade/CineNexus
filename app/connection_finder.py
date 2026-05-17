@@ -2,6 +2,7 @@ from app.neo4j_connection import Neo4jConnection
 
 
 class ConnectionFinder:
+
     def __init__(self):
         self.connection = Neo4jConnection()
 
@@ -9,78 +10,95 @@ class ConnectionFinder:
         self.connection.close()
 
     def find_between_movies(self, first_tmdb_id: int, second_tmdb_id: int) -> dict:
+        return {
+            "first_title": self._get_movie_title(first_tmdb_id),
+            "second_title": self._get_movie_title(second_tmdb_id),
+            "shared_directors": self._find_shared_people(first_tmdb_id, second_tmdb_id, "DIRECTED_BY"),
+            "shared_actors": self._find_shared_actors(first_tmdb_id, second_tmdb_id),
+            "shared_genres": self._find_shared_nodes(first_tmdb_id, second_tmdb_id, "HAS_GENRE", "Genre"),
+            "shared_keywords": self._find_shared_nodes(first_tmdb_id, second_tmdb_id, "HAS_KEYWORD", "Keyword"),
+            "shared_years": self._find_shared_nodes(first_tmdb_id, second_tmdb_id, "RELEASED_IN", "Year"),
+            "shortest_path": self._find_shortest_path(first_tmdb_id, second_tmdb_id),
+        }
+
+    def _get_movie_title(self, tmdb_id: int) -> str | None:
         with self.connection.session() as session:
-            # Use a managed read transaction so Neo4j can safely retry transient read failures.
-            return session.execute_read(
-                self._find_between_movies,
-                first_tmdb_id,
-                second_tmdb_id,
+            result = session.run(
+                """
+                MATCH (m:Movie {tmdb_id: $tmdb_id})
+                RETURN m.title AS title
+                """,
+                tmdb_id=tmdb_id,
+            )
+            record = result.single()
+            return record["title"] if record else None
+
+    def _find_shared_people(self, first_id: int, second_id: int, relation: str) -> list[str]:
+        with self.connection.session() as session:
+            # `relation` is passed only from internal constants, not user input.
+            result = session.run(
+                f"""
+                MATCH (m1:Movie {{tmdb_id: $first_id}})
+                MATCH (m2:Movie {{tmdb_id: $second_id}})
+                MATCH (m1)-[:{relation}]->(p:Person)<-[:{relation}]-(m2)
+                RETURN collect(DISTINCT p.name) AS names
+                """,
+                first_id=first_id,
+                second_id=second_id,
+            )
+            record = result.single()
+            return record["names"] if record else []
+
+    def _find_shared_actors(self, first_id: int, second_id: int) -> list[str]:
+        with self.connection.session() as session:
+            result = session.run(
+                """
+                MATCH (m1:Movie {tmdb_id: $first_id})
+                MATCH (m2:Movie {tmdb_id: $second_id})
+                MATCH (p:Person)-[:ACTED_IN]->(m1)
+                MATCH (p)-[:ACTED_IN]->(m2)
+                RETURN collect(DISTINCT p.name) AS names
+                """,
+                first_id=first_id,
+                second_id=second_id,
+            )
+            record = result.single()
+            return record["names"] if record else []
+
+    def _find_shared_nodes(self, first_id: int, second_id: int, relation: str, label: str) -> list[str]:
+        property_name = "value" if label == "Year" else "name"
+
+        with self.connection.session() as session:
+            # `relation` and `label` are fixed internal values selected by caller.
+            result = session.run(
+                f"""
+                MATCH (m1:Movie {{tmdb_id: $first_id}})
+                MATCH (m2:Movie {{tmdb_id: $second_id}})
+                MATCH (m1)-[:{relation}]->(n:{label})<-[:{relation}]-(m2)
+                RETURN collect(DISTINCT n.{property_name}) AS values
+                """,
+                first_id=first_id,
+                second_id=second_id,
+            )
+            record = result.single()
+            return record["values"] if record else []
+
+    def _find_shortest_path(self, first_id: int, second_id: int) -> list[str]:
+        with self.connection.session() as session:
+            result = session.run(
+                """
+                MATCH (m1:Movie {tmdb_id: $first_id})
+                MATCH (m2:Movie {tmdb_id: $second_id})
+                // Cap expansion depth to keep interactive queries fast.
+                MATCH path = shortestPath((m1)-[*..4]-(m2))
+                RETURN [node IN nodes(path) |
+                    labels(node)[0] + ':' + coalesce(node.name, node.title, toString(node.value))
+                ] AS path
+                LIMIT 1
+                """,
+                first_id=first_id,
+                second_id=second_id,
             )
 
-    @staticmethod
-    def _find_between_movies(tx, first_tmdb_id: int, second_tmdb_id: int) -> dict:
-        # Each OPTIONAL MATCH is followed by WITH to isolate aggregates and avoid
-        # row multiplication across independent match branches.
-        result = tx.run(
-            """
-            MATCH (m1:Movie {tmdb_id: $first_id})
-            MATCH (m2:Movie {tmdb_id: $second_id})
-
-            OPTIONAL MATCH (m1)-[:DIRECTED_BY]->(director:Person)<-[:DIRECTED_BY]-(m2)
-            WITH m1, m2, collect(DISTINCT director.name) AS shared_directors
-
-            OPTIONAL MATCH (actor:Person)-[:ACTED_IN]->(m1)
-            MATCH (actor)-[:ACTED_IN]->(m2)
-            WITH m1, m2, shared_directors, collect(DISTINCT actor.name) AS shared_actors
-
-            OPTIONAL MATCH (m1)-[:HAS_GENRE]->(genre:Genre)<-[:HAS_GENRE]-(m2)
-            WITH m1, m2, shared_directors, shared_actors, collect(DISTINCT genre.name) AS shared_genres
-
-            OPTIONAL MATCH (m1)-[:HAS_KEYWORD]->(keyword:Keyword)<-[:HAS_KEYWORD]-(m2)
-            WITH m1, m2, shared_directors, shared_actors, shared_genres, collect(DISTINCT keyword.name) AS shared_keywords
-
-            OPTIONAL MATCH (m1)-[:RELEASED_IN]->(year:Year)<-[:RELEASED_IN]-(m2)
-            WITH
-                m1,
-                m2,
-                shared_directors,
-                shared_actors,
-                shared_genres,
-                shared_keywords,
-                collect(DISTINCT year.value) AS shared_years
-
-            // Bound shortestPath expansion to keep interactive queries predictable.
-            OPTIONAL MATCH path = shortestPath((m1)-[*..4]-(m2))
-
-            RETURN
-                m1.title AS first_title,
-                m2.title AS second_title,
-                shared_directors,
-                shared_actors,
-                shared_genres,
-                shared_keywords,
-                shared_years,
-                // Normalize heterogeneous node labels into a single printable path format.
-                [node IN nodes(path) |
-                    labels(node)[0] + ':' + coalesce(node.name, node.title, toString(node.value))
-                ] AS shortest_path
-            """,
-            first_id=first_tmdb_id,
-            second_id=second_tmdb_id,
-        )
-
-        record = result.single()
-
-        if not record:
-            return {}
-
-        return {
-            "first_title": record["first_title"],
-            "second_title": record["second_title"],
-            "shared_directors": record["shared_directors"],
-            "shared_actors": record["shared_actors"],
-            "shared_genres": record["shared_genres"],
-            "shared_keywords": record["shared_keywords"],
-            "shared_years": record["shared_years"],
-            "shortest_path": record["shortest_path"],
-        }
+            record = result.single()
+            return record["path"] if record else []
