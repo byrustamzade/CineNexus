@@ -2,10 +2,13 @@ from app.ollama_client import OllamaClient
 
 
 class AIExplainer:
+    """Generate a concise, fact-grounded explanation from graph query output."""
+
     def __init__(self):
         self.llm = OllamaClient()
 
     def explain(self, connections: dict) -> str:
+        # Keep the prompt strict so the model explains only what the graph proves.
         prompt = f"""
 You are CineNexus, an AI assistant that explains movie graph connections.
 

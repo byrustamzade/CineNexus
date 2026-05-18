@@ -1,6 +1,8 @@
 import os
+
 from dotenv import load_dotenv
 
+# Load environment variables from `.env` for local development defaults.
 load_dotenv()
 
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")

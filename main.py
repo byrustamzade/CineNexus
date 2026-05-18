@@ -1,12 +1,13 @@
-from app.connection_finder import ConnectionFinder
 from app.ai_explainer import AIExplainer
+from app.connection_finder import ConnectionFinder
 from app.graph_store import GraphStore
 from app.movie_resolver import MovieResolver
 from app.tmdb_client import TMDBClient
 
 
 def load_and_store_movie(selected_movie: dict) -> dict:
-    # `selected_movie` comes from search results; fetch the full profile before persistence.
+    """Fetch selected movie details from TMDB and persist them to Neo4j."""
+    # Resolve the selected search result to a full TMDB profile before saving.
     client = TMDBClient()
     store = GraphStore()
 
@@ -21,13 +22,14 @@ def load_and_store_movie(selected_movie: dict) -> dict:
         store.save_movie_profile(movie_profile)
         print("Movie saved.")
     finally:
-        # Always close the driver, even when network/database writes fail mid-flow.
+        # Ensure the Neo4j driver is closed even if persistence fails.
         store.close()
 
     return movie_profile
 
 
 def print_connections(connections: dict) -> None:
+    """Render connection results in a readable CLI format."""
     print("\nGraph connections:")
     print("=" * 80)
 
@@ -57,6 +59,7 @@ def print_connections(connections: dict) -> None:
 
 
 def main():
+    """Run the interactive CineNexus workflow end-to-end."""
     print("\nCineNexus")
     print("=" * 80)
     print("Discover graph-based connections between two movies.")

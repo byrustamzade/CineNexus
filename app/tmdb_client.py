@@ -4,6 +4,8 @@ from app.settings import TMDB_API_KEY
 
 
 class TMDBClient:
+    """HTTP client for TMDB search and movie profile retrieval."""
+
     BASE_URL = "https://api.themoviedb.org/3"
 
     def __init__(self):
@@ -16,6 +18,7 @@ class TMDBClient:
         }
 
     def search_movies(self, query: str, page: int = 1) -> list[dict]:
+        """Search TMDB movies by free-text title."""
         response = requests.get(
             f"{self.BASE_URL}/search/movie",
             headers=self.headers,
@@ -35,6 +38,7 @@ class TMDBClient:
         return data.get("results", [])
 
     def get_movie_full_profile(self, movie_id: int) -> dict:
+        """Fetch full movie payload, including credits and keywords."""
         response = requests.get(
             f"{self.BASE_URL}/movie/{movie_id}",
             headers=self.headers,
@@ -49,13 +53,15 @@ class TMDBClient:
         return response.json()
 
     def normalize_movie_profile(self, raw: dict) -> dict:
-        # TMDB keeps directors inside the generic crew list; filter explicitly by job.
+        """Map TMDB payload into the graph schema expected by GraphStore."""
+        # TMDB stores directors in the crew list; filter by job for stable mapping.
         directors = [
-            person for person in raw.get("credits", {}).get("crew", [])
+            person
+            for person in raw.get("credits", {}).get("crew", [])
             if person.get("job") == "Director"
         ]
 
-        # Bound cast fan-out so graph writes/queries stay predictable for each movie node.
+        # Limit cast size to keep graph writes and queries predictable per movie.
         top_cast = raw.get("credits", {}).get("cast", [])[:10]
 
         return {
@@ -99,5 +105,6 @@ class TMDBClient:
         }
 
     def get_normalized_movie_profile(self, movie_id: int) -> dict:
+        """Fetch and normalize a movie profile in one call."""
         raw = self.get_movie_full_profile(movie_id)
         return self.normalize_movie_profile(raw)

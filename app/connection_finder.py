@@ -2,6 +2,7 @@ from app.neo4j_connection import Neo4jConnection
 
 
 class ConnectionFinder:
+    """Query Neo4j for direct and structural links between two movies."""
 
     def __init__(self):
         self.connection = Neo4jConnection()
@@ -10,6 +11,7 @@ class ConnectionFinder:
         self.connection.close()
 
     def find_between_movies(self, first_tmdb_id: int, second_tmdb_id: int) -> dict:
+        """Collect all connection dimensions used by the CLI and AI explainer."""
         return {
             "first_title": self._get_movie_title(first_tmdb_id),
             "second_title": self._get_movie_title(second_tmdb_id),
@@ -22,6 +24,7 @@ class ConnectionFinder:
         }
 
     def _get_movie_title(self, tmdb_id: int) -> str | None:
+        """Return the movie title if it exists in the graph."""
         with self.connection.session() as session:
             result = session.run(
                 """
@@ -34,6 +37,7 @@ class ConnectionFinder:
             return record["title"] if record else None
 
     def _find_shared_people(self, first_id: int, second_id: int, relation: str) -> list[str]:
+        """Return person names connected to both movies via the same relation."""
         with self.connection.session() as session:
             # `relation` is passed only from internal constants, not user input.
             result = session.run(
@@ -50,6 +54,7 @@ class ConnectionFinder:
             return record["names"] if record else []
 
     def _find_shared_actors(self, first_id: int, second_id: int) -> list[str]:
+        """Return actor names that appear in both movies."""
         with self.connection.session() as session:
             result = session.run(
                 """
@@ -66,6 +71,7 @@ class ConnectionFinder:
             return record["names"] if record else []
 
     def _find_shared_nodes(self, first_id: int, second_id: int, relation: str, label: str) -> list[str]:
+        """Return shared node values for the given relationship and label."""
         property_name = "value" if label == "Year" else "name"
 
         with self.connection.session() as session:
@@ -84,6 +90,7 @@ class ConnectionFinder:
             return record["values"] if record else []
 
     def _find_shortest_path(self, first_id: int, second_id: int) -> list[str]:
+        """Return a display-friendly shortest path between two movie nodes."""
         with self.connection.session() as session:
             result = session.run(
                 """

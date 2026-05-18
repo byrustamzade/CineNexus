@@ -8,6 +8,8 @@ from app.settings import (
 
 
 class Neo4jConnection:
+    """Thin wrapper around the Neo4j driver configuration and lifecycle."""
+
     def __init__(self):
         self.driver = GraphDatabase.driver(
             NEO4J_URI,
@@ -18,4 +20,5 @@ class Neo4jConnection:
         self.driver.close()
 
     def session(self):
+        """Create a new Neo4j session for read/write operations."""
         return self.driver.session()

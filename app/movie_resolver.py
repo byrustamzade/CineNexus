@@ -2,10 +2,13 @@ from app.tmdb_client import TMDBClient
 
 
 class MovieResolver:
+    """Handle interactive movie lookup and user selection from TMDB results."""
+
     def __init__(self):
         self.client = TMDBClient()
 
     def resolve(self, label: str) -> dict | None:
+        """Prompt until a valid selection is made or the user cancels."""
         while True:
             query = input(f"\nEnter {label} movie name: ").strip()
 
@@ -21,11 +24,12 @@ class MovieResolver:
 
             selected = self._select_from_results(query, results)
 
+            # Returning None lets caller decide whether to abort or restart.
             if selected:
                 return selected
 
     def _select_from_results(self, query: str, results: list[dict]) -> dict | None:
-        # Keep the CLI list short enough to scan while preserving top relevance ordering.
+        # Keep the interactive list short while preserving TMDB ranking order.
         filtered_results = results[:10]
 
         while True:
@@ -51,7 +55,7 @@ class MovieResolver:
 
                 if not filtered_results:
                     print(f"No results found for year: {year}")
-                    # Fall back to the original shortlist so the user can continue selection.
+                    # Restore the default shortlist so selection can continue.
                     filtered_results = results[:10]
 
                 continue
@@ -90,6 +94,7 @@ class MovieResolver:
             return []
 
         return [
-            movie for movie in results
+            movie
+            for movie in results
             if (movie.get("release_date") or "").startswith(year)
         ][:10]

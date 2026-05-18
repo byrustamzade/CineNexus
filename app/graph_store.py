@@ -1,13 +1,9 @@
 from app.neo4j_connection import Neo4jConnection
 
-from app.settings import (
-    NEO4J_URI,
-    NEO4J_USERNAME,
-    NEO4J_PASSWORD,
-)
-
 
 class GraphStore:
+    """Persist normalized TMDB movie profiles into Neo4j."""
+
     def __init__(self):
         self.connection = Neo4jConnection()
 
@@ -15,12 +11,13 @@ class GraphStore:
         self.connection.close()
 
     def save_movie_profile(self, movie: dict):
+        """Write a full movie profile in a single managed write transaction."""
         with self.connection.session() as session:
             session.execute_write(self._save_movie_profile, movie)
 
     @staticmethod
     def _save_movie_profile(tx, movie: dict):
-        # MERGE on `tmdb_id` makes writes idempotent across repeated imports.
+        # Use tmdb_id as the stable identity key for idempotent upserts.
         tx.run(
             """
             MERGE (m:Movie {tmdb_id: $tmdb_id})
@@ -40,7 +37,7 @@ class GraphStore:
         )
 
         if movie.get("year"):
-            # Year is modeled as a shared node to support temporal graph traversals.
+            # Model release year as a shared node for temporal traversals.
             tx.run(
                 """
                 MATCH (m:Movie {tmdb_id: $tmdb_id})
@@ -51,7 +48,7 @@ class GraphStore:
                 year=movie["year"],
             )
 
-        # Relationship directions are intentional for role-centric traversals.
+        # Direction is intentional to keep role-based traversals explicit.
         for director in movie.get("directors", []):
             tx.run(
                 """
@@ -65,7 +62,7 @@ class GraphStore:
                 name=director["name"],
             )
 
-        # Cast order is persisted as relationship metadata so billing rank is queryable.
+        # Persist cast order on the relationship so billing rank remains queryable.
         for cast in movie.get("cast", []):
             tx.run(
                 """
