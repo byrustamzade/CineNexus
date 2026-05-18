@@ -61,7 +61,13 @@ def test_find_between_movies_maps_results_to_expected_shape() -> None:
         if "RELEASED_IN" in query:
             return {"values": [2010]}
         if "shortestPath" in query:
-            return {"path": ["Movie:Inception", "Person:Christopher Nolan", "Movie:Interstellar"]}
+            return {
+                "path": [
+                    "Movie:Inception",
+                    "Person:Christopher Nolan",
+                    "Movie:Interstellar",
+                ]
+            }
         raise AssertionError(f"Unexpected query: {query}")
 
     finder, fake_connection = _build_finder(record_for_query)

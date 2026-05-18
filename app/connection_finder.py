@@ -15,11 +15,19 @@ class ConnectionFinder:
         return {
             "first_title": self._get_movie_title(first_tmdb_id),
             "second_title": self._get_movie_title(second_tmdb_id),
-            "shared_directors": self._find_shared_people(first_tmdb_id, second_tmdb_id, "DIRECTED_BY"),
+            "shared_directors": self._find_shared_people(
+                first_tmdb_id, second_tmdb_id, "DIRECTED_BY"
+            ),
             "shared_actors": self._find_shared_actors(first_tmdb_id, second_tmdb_id),
-            "shared_genres": self._find_shared_nodes(first_tmdb_id, second_tmdb_id, "HAS_GENRE", "Genre"),
-            "shared_keywords": self._find_shared_nodes(first_tmdb_id, second_tmdb_id, "HAS_KEYWORD", "Keyword"),
-            "shared_years": self._find_shared_nodes(first_tmdb_id, second_tmdb_id, "RELEASED_IN", "Year"),
+            "shared_genres": self._find_shared_nodes(
+                first_tmdb_id, second_tmdb_id, "HAS_GENRE", "Genre"
+            ),
+            "shared_keywords": self._find_shared_nodes(
+                first_tmdb_id, second_tmdb_id, "HAS_KEYWORD", "Keyword"
+            ),
+            "shared_years": self._find_shared_nodes(
+                first_tmdb_id, second_tmdb_id, "RELEASED_IN", "Year"
+            ),
             "shortest_path": self._find_shortest_path(first_tmdb_id, second_tmdb_id),
         }
 
@@ -36,7 +44,9 @@ class ConnectionFinder:
             record = result.single()
             return record["title"] if record else None
 
-    def _find_shared_people(self, first_id: int, second_id: int, relation: str) -> list[str]:
+    def _find_shared_people(
+        self, first_id: int, second_id: int, relation: str
+    ) -> list[str]:
         """Return person names connected to both movies via the same relation."""
         with self.connection.session() as session:
             # `relation` is passed only from internal constants, not user input.
@@ -70,7 +80,9 @@ class ConnectionFinder:
             record = result.single()
             return record["names"] if record else []
 
-    def _find_shared_nodes(self, first_id: int, second_id: int, relation: str, label: str) -> list[str]:
+    def _find_shared_nodes(
+        self, first_id: int, second_id: int, relation: str, label: str
+    ) -> list[str]:
         """Return shared node values for the given relationship and label."""
         property_name = "value" if label == "Year" else "name"
 
